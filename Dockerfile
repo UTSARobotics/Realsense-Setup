@@ -1,57 +1,62 @@
-# syntax=docker/dockerfile:1
+FROM python:3.11-bookworm
 
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Dockerfile reference guide at
-# https://docs.docker.com/go/dockerfile-reference/
-
-# Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
-
-ARG PYTHON_VERSION=3.11
-FROM python:${PYTHON_VERSION}-slim AS base
-
-# Prevents Python from writing pyc files.
-ENV PYTHONDONTWRITEBYTECODE=1
-
-# Keeps Python from buffering stdout and stderr to avoid situations where
-# the application crashes without emitting any logs due to buffering.
-ENV PYTHONUNBUFFERED=1
-
-WORKDIR /app
-
-# Create a non-privileged user that the app will run under.
-# See https://docs.docker.com/go/dockerfile-user-best-practices/
-ARG UID=10001
-RUN adduser \
-    --disabled-password \
-    --gecos "" \
-    --home "/nonexistent" \
-    --shell "/sbin/nologin" \
-    --no-create-home \
-    --uid "${UID}" \
-    appuser
-
-# Download dependencies as a separate step to take advantage of Docker's caching.
-# Leverage a cache mount to /root/.cache/pip to speed up subsequent builds.
-# Leverage a bind mount to requirements.txt to avoid having to copy them into
-# into this layer.
+# 1. Install System Tools
+# 'sudo' is needed because we run as a non-root user but might need root privileges
 RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    cmake \
     gcc \
-    python3-dev \
-    linux-headers-generic \
+    g++ \
+    sudo \
+    curl \
+    lsb-release \
+    libxml2-dev \
+    libxslt-dev \
+    iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=requirements.txt,target=requirements.txt \
-    python -m pip install -r requirements.txt
+# 2. Create a Non-Root User 'rover'
+ARG UID=1000
+RUN useradd -m -u ${UID} -s /bin/bash rover && \
+    usermod -aG sudo rover && \
+    echo "rover ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/rover
 
-# Switch to the non-privileged user to run the application.
-USER appuser
+# 3. Setup ArduPilot (Internal Clone)
+# We clone into /opt so it doesn't conflict with your code in /workspace
+WORKDIR /opt
+RUN git clone --recursive --depth 1 https://github.com/ArduPilot/ardupilot.git
+RUN chown -R rover:rover /opt/ardupilot
 
-# Copy the source code into the container.
-COPY . .
+# 4. Install Build Dependencies (Global)
+# We install the specific versions ArduPilot needs manually to avoid script errors
+RUN pip install --no-cache-dir \
+    empy==3.3.4 \
+    pexpect \
+    future \
+    pymavlink \
+    mavproxy \
+    requests
 
-# Expose the port that the application listens on.
-EXPOSE 8000
+# 5. Build the Rover Simulator
+USER rover
+WORKDIR /opt/ardupilot
+# Configure for Software-In-The-Loop (SITL)
+RUN ./waf configure --board sitl
+# Build the Rover binary
+RUN ./waf rover
 
-# Run the application.
-CMD ["python", "main.py"]
+# 6. Add Sim Tools to Path
+ENV PATH="/opt/ardupilot/Tools/autotest:/opt/ardupilot/build/sitl/bin:${PATH}"
+
+# 7. Setup Your Project Environment
+WORKDIR /workspace
+# Copy your specific project requirements
+COPY --chown=rover:rover requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy your python code
+COPY --chown=rover:rover . .
+
+# Default command (can be overridden by compose)
+CMD ["/bin/bash"]
