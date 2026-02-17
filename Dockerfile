@@ -48,8 +48,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     python3 -m pip install -r requirements.txt
 
 # Switch to the non-privileged user to run the application.
-USER appuser
 
+RUN useradd -m -d /home/developer -s /bin/bash developer
+USER developer
+ENV HOME=/home/developer
 # Copy the source code into the container.
 COPY . .
 

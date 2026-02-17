@@ -1,1 +1,3 @@
-print("Docker is working yay!")
+import os
+print("HOME =", os.environ.get("HOME"))
+
