@@ -1,3 +1,4 @@
+import os
 import time
 import serial
 # ros libraries
@@ -12,8 +13,11 @@ class rover_node(Node):
     def __init__(self):
         super().__init__('rover_node')
         
-        # serial object to communicate with esp32
-        self.ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+        # Get serial port from environment variable (default /dev/ttyACM1)
+        serial_port = os.environ.get("ROVER_SERIAL_PORT", "/dev/ttyACM1")
+        
+        # serial object to communicate with ESP32
+        self.ser = serial.Serial(serial_port, 115200, timeout=1)        
         
         # node subscriber - listens for motor commands from Taranis node
         self.sub = self.create_subscription(
@@ -22,7 +26,7 @@ class rover_node(Node):
             self.rover_callback,
             10)
         
-        self.get_logger().info('Rover node ready - waiting for motor commands...')
+        self.get_logger().info(f'Rover node ready - using serial port {serial_port}')
         
     # subscriber callback
     def rover_callback(self, msg):
