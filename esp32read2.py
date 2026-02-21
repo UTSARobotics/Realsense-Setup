@@ -1,7 +1,34 @@
-from machine import UART
+from machine import UART, PWM, Pin
 import time
 
-uart = UART(2, baudrate=420000, bits=8, parity=None, stop=1, rx=27, tx=16)
+servo = PWM(Pin(19), freq=50)
+uart = UART(2, baudrate=420000, bits=8, parity=None, stop=1, rx=16, tx=17)
+
+def set_angle(angle):
+    duty = int((angle / 180) * (125-20) +20)
+    servo.duty(duty)
+
+
+def steering_control(anglech2):
+    if ch2 == (1984 or 1986):
+        anglech2 = 0
+    else:
+        if ch2 > 1984:
+            anglech2 = ((ch2 - 1984) / 1638) * 180
+        if ch2 > 1986:
+            anglech2 = ((ch2 - 1986) / 1636) * 180
+        if ch2 < 1984:
+            anglech2 = ((1984 - ch2) / 1638) * -180
+        if ch2 < 1986:
+            anglech2 = ((1986 - ch2) / 1636) * -180
+        set_angle(anglech2)
+                    
+ 
+                
+                               
+                    
+                        
+
 
 # CRC8 DVB-S2
 def crc8_dvb_s2(data):
@@ -17,6 +44,19 @@ def crc8_dvb_s2(data):
 
 
 buffer = bytearray()
+
+def get_duty_cycle(raw_value):
+        in_min, in_max = 326, 3266
+        out_min, out_max = -100, 100
+    
+        mapped_val = out_min + (raw_value - in_min) * (out_max - out_min) / (in_max - in_min)
+    
+        duty = ((mapped_val + 100) / 200) * 5
+        
+        print(int(duty))
+        return int(duty)
+    
+    
 
 def parse_ghst():
     global buffer
@@ -36,47 +76,55 @@ def parse_ghst():
         frame = buffer[:full_frame_len]
         buffer = buffer[full_frame_len:]
 
-        # Structure:
+        # Now based on your structure:
         # [ADDR][LEN][TYPE][PAYLOAD...][CRC]
 
         frame_type = frame[2]
         received_crc = frame[-1]
 
-        # CRC over TYPE + PAYLOAD
+        # CRC calculated over TYPE + PAYLOAD (NOT including CRC)
         calculated_crc = crc8_dvb_s2(frame[2:-1])
 
         if calculated_crc != received_crc:
             print("CRC FAIL")
             continue
 
-        payload = frame[3:-1]
+        payload = frame[3:-1]  # isolate payload cleanly
 
         print("Valid Frame")
         print("Type:", frame_type)
-        print("Payload:", payload)
+        print("Payload:", [p for p in payload])
 
-        # Decode first 5 channels (need at least 8 payload bytes)
-        if len(payload) >= 8:
+        # Example: decode first 4 channels if enough payload
+        if len(payload) >= 6:
             ch1 = (payload[0] | (payload[1] << 8)) & 0x0FFF
             ch2 = ((payload[1] >> 4) | (payload[2] << 4)) & 0x0FFF
             ch3 = (payload[3] | (payload[4] << 8)) & 0x0FFF
             ch4 = ((payload[4] >> 4) | (payload[5] << 4)) & 0x0FFF
-            ch5 = (payload[6] | (payload[7] << 8)) & 0x0FFF
 
-            # 2-position switch logic
-            # weight = 100 implied by full 0-4096 range
-            ch5_switch = 1 if ch5 >= 2000 else 0
+            print("CH1:", ch1, "CH2:", ch2, "CH3:", ch3, "CH4:", ch4)
+            
+            #target_duty = get_duty_cycle(ch1)
+            
+            if ch1 > 3000 and ch4 > 2000:
+                set_angle(0)   # backwards
+            if ch1 > 3000 and ch4 < 2000:
+                set_angle(180) # forward
+            if ch1 > 1000 and ch1 < 3000:
+                set_angle(90)  # Still
+                
+                
+            steering_control(ch2)
+            
+            #qwerty = (ch1 - 346) / (3622 - 346) * 180
+            #set_angle(qwerty)
+            #time.sleep_ms(100)
 
-            print(
-                "CH1:", ch1,
-                "CH2:", ch2,
-                "CH3:", ch3,
-                "CH4:", ch4,
-                "CH5:", ch5,
-                "SW:", ch5_switch
-            )
+            #if ch4 > 2000:
+            #    print("FUCK")
+            #    set_angle(180)
 
-
+            
 while True:
     parse_ghst()
     time.sleep_ms(2)
