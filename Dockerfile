@@ -60,4 +60,4 @@ COPY . .
 EXPOSE 8000
 
 # Run the application.
-CMD ["python", "mini_rover_comms.py"]
+CMD ["python", "main.py"]
