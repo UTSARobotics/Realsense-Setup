@@ -8,8 +8,7 @@ def set_angle(angle):
     duty = int((angle / 180) * (125-20) +20)
     servo.duty(duty)
 
-def send_pwm(freq):
-    speed = 32.76 * 
+
 
 
 # CRC8 DVB-S2
@@ -73,6 +72,14 @@ def parse_ghst():
 
             print("CH1:", ch1, "CH2:", ch2, "CH3:", ch3, "CH4:", ch4)
             set_angle(90)
+
+
+            while ch1 > 346:
+                print("fuck")
+                qwerty = (ch1 - 346) / (3622 - 346) * 180
+                set_angle(qwerty)
+                time.sleep_ms(100)
+
 
             if ch4 > 2000:
                 print("FUCK")
