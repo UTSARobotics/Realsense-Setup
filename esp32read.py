@@ -1,7 +1,16 @@
-from machine import UART
+from machine import UART, PWM, Pin
 import time
 
+servo = PWM(Pin(19), freq=50)
 uart = UART(2, baudrate=420000, bits=8, parity=None, stop=1, rx=16, tx=17)
+
+def set_angle(angle):
+    duty = int((angle / 180) * (125-20) +20)
+    servo.duty(duty)
+
+def send_pwm(freq):
+    speed = 32.76 * 
+
 
 # CRC8 DVB-S2
 def crc8_dvb_s2(data):
@@ -53,7 +62,7 @@ def parse_ghst():
 
         print("Valid Frame")
         print("Type:", frame_type)
-        print("Payload:", payload)
+        print("Payload:", [p for p in payload])
 
         # Example: decode first 4 channels if enough payload
         if len(payload) >= 6:
@@ -63,6 +72,11 @@ def parse_ghst():
             ch4 = ((payload[4] >> 4) | (payload[5] << 4)) & 0x0FFF
 
             print("CH1:", ch1, "CH2:", ch2, "CH3:", ch3, "CH4:", ch4)
+            set_angle(90)
+
+            if ch4 > 2000:
+                print("FUCK")
+                set_angle(180)
 
 
 while True:
